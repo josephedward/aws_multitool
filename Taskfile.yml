@@ -1,0 +1,10 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: main
+  main:
+    cmds:
+      - echo "***Running CLI***"
+      - go run ./main.go  -v -rod="show,trace"
