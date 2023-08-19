@@ -273,14 +273,14 @@ func UpdateAWSCredentials(profile, keyID, accessKey string) error {
 }
 
 func OpenAWSConsole(selectedProfile *AWSMaster) {
-	// var openConsole string
-	// fmt.Print("Do you want to open the AWS Management Console? (y/n): ")
-	// fmt.Scan(&openConsole)
+	var openConsole string
+	fmt.Print("Do you want to open the AWS Management Console? (y/n): ")
+	fmt.Scan(&openConsole)
 
-	// if openConsole == "n" || openConsole == "no" || openConsole == "N" || openConsole == "No" || openConsole == "NO" {
-	// 	fmt.Println("AWS Management Console will not be opened.")
-	// 	return
-	// }
+	if openConsole == "n" || openConsole == "no" || openConsole == "N" || openConsole == "No" || openConsole == "NO" {
+		fmt.Println("AWS Management Console will not be opened.")
+		return
+	}
 
 	if selectedProfile == nil || selectedProfile.Region == "" {
 		fmt.Println("Please select a valid AWS profile with a specified region.")
@@ -315,7 +315,7 @@ func OpenAWSConsole(selectedProfile *AWSMaster) {
 
 	// Optionally, you can take further actions using rod to interact with the page if needed.
 	// For example, you might want to log in with credentials or other interactions.
-	
+
 	fmt.Println("AWS Management Console page navigated to.")
 	select {} // This line will prevent the program from exiting and keep the browser open.
 }
