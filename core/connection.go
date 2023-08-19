@@ -36,15 +36,14 @@ func SimpleLogin(connect Connection, login WebsiteLogin) (Connection, error) {
 	return Connection{Browser: connect.Browser, Page: page}, nil
 }
 
-func Connect(browser *rod.Browser, url string) (Connection) {
+func Connect(browser *rod.Browser, url string) Connection {
 	page := browser.MustPage(url)
 	return Connection{Browser: browser, Page: page}
 }
 
-
-func Login(login WebsiteLogin) (Connection, error) {
-	// Launch a new browser with default options, and connect to it.
-	browser := rod.New().MustConnect()
+func Login(login WebsiteLogin, browser *rod.Browser) (Connection, error) {
+	// // Launch a new browser with default options, and connect to it.
+	// browser := rod.New().MustConnect()
 
 	// Create a new page
 	page := browser.MustPage(login.Url)
