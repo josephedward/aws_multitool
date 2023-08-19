@@ -7,16 +7,18 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/go-rod/rod"
+	"github.com/manifoldco/promptui"
 	"github.com/rs/zerolog"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	// "runtime"
+	// "log"
 )
 
-type AWSCredentials struct {
+type AWSMaster struct {
 	Profile    string
 	AccessKey  string
 	SecretKey  string
@@ -25,8 +27,129 @@ type AWSCredentials struct {
 	OtherProps map[string]string
 }
 
-func ReadAWSCredentialsFile() ([]AWSCredentials, error) {
-	var credentials []AWSCredentials
+func main() {
+	cli.Welcome()
+	ZeroLog()
+	sP := Profile()
+	AwsLogin(sP)
+}
+
+func ZeroLog() {
+	fmt.Println("os.Args : ", os.Args)
+	// default
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	//if string prod is in args, set global level to info
+	for _, arg := range os.Args {
+		if arg == "prod" {
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		}
+	}
+	fmt.Println("global logger level : ")
+	fmt.Println(zerolog.GlobalLevel())
+}
+
+func Profile() (m *AWSMaster) {
+	credentials, err := ReadAWSMasterFile()
+	if err != nil {
+		fmt.Println("Error reading AWS credentials:", err)
+		return
+	}
+
+	var profileNames []string
+	for _, creds := range credentials {
+		profileNames = append(profileNames, creds.Profile)
+	}
+
+	prompt := promptui.Select{
+		Label: "Select a profile : ",
+		Items: profileNames,
+	}
+
+	_, selected, err := prompt.Run()
+	if err != nil {
+		fmt.Println("Prompt failed:", err)
+		return
+	}
+
+	if selected == "profile sandbox" {
+		// run Sandbox method
+		newCreds, err := Sandbox()
+		if err != nil {
+			fmt.Println("Error logging into ACloudGuru:", err)
+			return
+		}
+
+		err = UpdateAWSCredentials("sandbox", newCreds.SandboxCredential.KeyID, newCreds.SandboxCredential.AccessKey)
+
+		if err != nil {
+			fmt.Println("Error updating AWS credentials:", err)
+			return
+		}
+		fmt.Println("Sandbox credentials updated successfully!")
+	}
+
+	return &AWSMaster{
+		Profile:   selected,
+		AccessKey: credentials[0].AccessKey,
+		SecretKey: credentials[0].SecretKey,
+		Region:    credentials[0].Region,
+	}
+}
+
+func Sandbox() (acloud.ACloudProvider, error) {
+	var p acloud.ACloudProvider
+	login, err := acloud.ACloudLogin(p)
+	// p.Connection = connect
+	p.ACloudEnv.Url = login.Url
+	p.ACloudEnv.Username = login.Username
+	p.ACloudEnv.Password = login.Password
+	if err != nil {
+		fmt.Println("Error logging into ACloudGuru:", err)
+		return p, err
+	}
+
+	p, err = ConnectBrowser(p)
+	cli.PrintIfErr(err)
+	cli.Success("environment : ", p.ACloudEnv)
+
+	// log browser
+	cli.Success("Browser : ", p.Connection.Browser)
+
+	// //login to acloud
+	p.Connection, err = core.Login(core.WebsiteLogin{p.ACloudEnv.Url, p.ACloudEnv.Username, p.ACloudEnv.Password}, p.Connection.Browser)
+	cli.PrintIfErr(err)
+	cli.Success("A Cloud Provider : ", p)
+
+	time.Sleep(1 * time.Second)
+
+	//scrape credentials
+	elems, err := acloud.Sandbox(p.Connection, p.ACloudEnv.Download_key)
+	cli.PrintIfErr(err)
+	cli.Success("rod html elements : ", elems)
+
+	//copy credentials to clipboard
+	creds, err := acloud.SimpleCopy(elems)
+	cli.PrintIfErr(err)
+	acloud.DisplayCreds(creds)
+
+	//save provider
+	p.SandboxCredential = creds
+	return p, err
+}
+
+func ConnectBrowser(p acloud.ACloudProvider) (acloud.ACloudProvider, error) {
+	p.Connection.Browser = rod.New().MustConnect()
+	ACloudEnv, err := cli.LoadEnv()
+	cli.PrintIfErr(err)
+	p.ACloudEnv = ACloudEnv
+	Connection := core.Connect(p.Connection.Browser, p.ACloudEnv.Url)
+	cli.Success("Connection after: ", Connection)
+	p.Connection = Connection
+	return p, nil
+}
+
+func ReadAWSMasterFile() ([]AWSMaster, error) {
+	var credentials []AWSMaster
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -42,7 +165,7 @@ func ReadAWSCredentialsFile() ([]AWSCredentials, error) {
 
 	scanner := bufio.NewScanner(file)
 	currentProfile := ""
-	var currentCreds AWSCredentials
+	var currentCreds AWSMaster
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -53,7 +176,7 @@ func ReadAWSCredentialsFile() ([]AWSCredentials, error) {
 				credentials = append(credentials, currentCreds)
 			}
 			currentProfile = line[1 : len(line)-1]
-			currentCreds = AWSCredentials{Profile: currentProfile}
+			currentCreds = AWSMaster{Profile: currentProfile}
 		} else if strings.Contains(line, "=") {
 			// Key-value pair
 			parts := strings.SplitN(line, "=", 2)
@@ -84,33 +207,88 @@ func ReadAWSCredentialsFile() ([]AWSCredentials, error) {
 	return credentials, scanner.Err()
 }
 
-func SelectAWSProfile(credentials []AWSCredentials) *AWSCredentials {
-	fmt.Println("Available AWS Profiles:")
-	for _, cred := range credentials {
-		fmt.Println("-", cred.Profile)
+func UpdateAWSCredentials(profile, keyID, accessKey string) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter the name of the profile you want to use: ")
-	profileName, _ := reader.ReadString('\n')
-	profileName = strings.TrimSpace(profileName)
+	credentialsFile := filepath.Join(homeDir, ".aws", "credentials")
+	tempCredentialsFile := credentialsFile + ".tmp"
 
-	for _, cred := range credentials {
-		if cred.Profile == profileName {
-			return &cred
+	credentials, err := os.Open(credentialsFile)
+	if err != nil {
+		return err
+	}
+	defer credentials.Close()
+
+	tempFile, err := os.Create(tempCredentialsFile)
+	if err != nil {
+		return err
+	}
+	defer tempFile.Close()
+
+	writer := bufio.NewWriter(tempFile)
+
+	scanner := bufio.NewScanner(credentials)
+	insideTargetProfile := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			if insideTargetProfile {
+				insideTargetProfile = false
+			}
+
+			profileName := strings.TrimSpace(line[1 : len(line)-1])
+			if profileName == profile {
+				insideTargetProfile = true
+				_, _ = fmt.Fprintf(writer, "[%s]\n", profile)
+				_, _ = fmt.Fprintf(writer, "aws_access_key_id = %s\n", keyID)
+				_, _ = fmt.Fprintf(writer, "aws_secret_access_key = %s\n", accessKey)
+				_, _ = fmt.Fprintln(writer)
+			} else {
+				_, _ = fmt.Fprintln(writer, line)
+			}
+		} else if !insideTargetProfile {
+			_, _ = fmt.Fprintln(writer, line)
 		}
+	}
+
+	if !insideTargetProfile {
+		// Profile not found, create a new entry
+		_, _ = fmt.Fprintf(writer, "[%s]\n", profile)
+		_, _ = fmt.Fprintf(writer, "aws_access_key_id = %s\n", keyID)
+		_, _ = fmt.Fprintf(writer, "aws_secret_access_key = %s\n", accessKey)
+		_, _ = fmt.Fprintln(writer)
+	}
+
+	writer.Flush()
+
+	err = os.Rename(tempCredentialsFile, credentialsFile)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func OpenAWSConsole(selectedProfile *AWSCredentials) {
+func OpenAWSConsole(selectedProfile *AWSMaster) {
+	var openConsole string
+	fmt.Print("Do you want to open the AWS Management Console? (y/n): ")
+	fmt.Scan(&openConsole)
+
+	if openConsole == "n" || openConsole == "no" || openConsole == "N" || openConsole == "No" || openConsole == "NO" {
+		fmt.Println("AWS Management Console will not be opened.")
+		return
+	}
+
 	if selectedProfile == nil || selectedProfile.Region == "" {
 		fmt.Println("Please select a valid AWS profile with a specified region.")
 		return
 	}
 
-	// Get the account number via AWS CLI
 	cmd := exec.Command("aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text")
 
 	output, err := cmd.Output()
@@ -139,41 +317,7 @@ func OpenAWSConsole(selectedProfile *AWSCredentials) {
 	fmt.Println("AWS Management Console opened in your default web browser.")
 }
 
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
-
-func ReadWebsiteLoginFromEnv() core.WebsiteLogin {
-	return core.WebsiteLogin{
-		Url:      getEnv("URL", "https://learn.acloud.guru/cloud-playground/cloud-sandboxes"),
-		Username: getEnv("USERNAME", ""),
-		Password: getEnv("PASSWORD", ""),
-	}
-}
-
-func ACloudLogin(p acloud.ACloudProvider) (core.WebsiteLogin, error) {
-	login := ReadWebsiteLoginFromEnv()
-	fmt.Println("login : ", login)
-
-	return login, nil
-}
-
-func AwsLogin() {
-	credentials, err := ReadAWSCredentialsFile()
-	if err != nil {
-		fmt.Println("Error reading AWS credentials file:", err)
-		return
-	}
-
-	selectedProfile := SelectAWSProfile(credentials)
-	if selectedProfile == nil {
-		fmt.Println("Profile not found.")
-		return
-	}
+func AwsLogin(selectedProfile *AWSMaster) {
 
 	// Set the AWS environment variables for the selected profile
 	os.Setenv("AWS_ACCESS_KEY_ID", selectedProfile.AccessKey)
@@ -184,6 +328,9 @@ func AwsLogin() {
 
 	// Open AWS Management Console with the selected profile
 	OpenAWSConsole(selectedProfile)
+
+	// use core.SimpleLogin to login to AWS
+	core.SimpleLogin()
 }
 
 func OpenDefaultBrowserAndNavigate(pageURL string) (*rod.Page, error) {
@@ -200,82 +347,4 @@ func OpenDefaultBrowserAndNavigate(pageURL string) (*rod.Page, error) {
 	page.WaitLoad()
 
 	return page, nil
-}
-
-func ZeroLog() {
-	fmt.Println("os.Args : ", os.Args)
-	// default
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	//if string prod is in args, set global level to info
-	for _, arg := range os.Args {
-		if arg == "prod" {
-			zerolog.SetGlobalLevel(zerolog.InfoLevel)
-		}
-	}
-	fmt.Println("global logger level : ")
-	fmt.Println(zerolog.GlobalLevel())
-}
-
-func ConnectBrowser(p acloud.ACloudProvider) (acloud.ACloudProvider, error) {
-	p.Connection.Browser = rod.New().MustConnect()
-	ACloudEnv, err := cli.LoadEnv()
-	cli.PrintIfErr(err)
-	p.ACloudEnv = ACloudEnv
-	Connection := core.Connect(p.Connection.Browser, p.ACloudEnv.Url)
-	cli.Success("Connection after: ", Connection)
-	p.Connection = Connection
-	return p, nil
-}
-
-func Sandbox(p *acloud.ACloudProvider) (acloud.ACloudProvider, error) {
-
-	cli.Success("p.Connection.Browser : ", p.Connection)
-	cli.Success("p.ACloudEnv.Download_key : ", p.ACloudEnv.Download_key)
-
-	//scrape credentials
-	elems, err := acloud.Sandbox(p.Connection, p.ACloudEnv.Download_key)
-	cli.PrintIfErr(err)
-	cli.Success("rod html elements : ", elems)
-
-	// copy credentials to clipboard
-	p.SandboxCredential, err = acloud.CopySvg(elems)
-	cli.PrintIfErr(err)
-	cli.Success("credentials : ", p.SandboxCredential)
-
-	acloud.DisplayCreds(p.SandboxCredential)
-
-	return *p, err
-}
-
-func main() {
-	cli.Welcome()
-	ZeroLog()
-
-	var p acloud.ACloudProvider
-	login, err := ACloudLogin(p)
-	// p.Connection = connect
-	p.ACloudEnv.Url = login.Url
-	p.ACloudEnv.Username = login.Username
-	p.ACloudEnv.Password = login.Password
-	if err != nil {
-		fmt.Println("Error logging into ACloudGuru:", err)
-		return
-	}
-
-	p, err = ConnectBrowser(p)
-	// log browser
-	cli.Success("Browser : ", p.Connection.Browser)
-	cli.PrintIfErr(err)
-	cli.Success("environment : ", p.ACloudEnv)
-
-	//login to acloud
-	p.Connection, err = core.Login(core.WebsiteLogin{p.ACloudEnv.Url, p.ACloudEnv.Username, p.ACloudEnv.Password})
-	cli.PrintIfErr(err)
-	// cli.Success("A Cloud Provider : ", p)
-
-	//get sandbox credentials
-	p, err = Sandbox(&p)
-	cli.PrintIfErr(err)
-	// cli.Success("p : ", p)
-
 }
