@@ -1,9 +1,11 @@
 package acloud
 
 import (
+	"aws-multitool/cli"
 	"aws-multitool/core"
 	"os"
 	"fmt"
+	"github.com/go-rod/rod"
 )
 
 func ACloudLogin(p ACloudProvider) (core.WebsiteLogin, error) {
@@ -29,3 +31,13 @@ func getEnv(key, defaultValue string) string {
 	return value
 }
 
+func ConnectBrowser(p ACloudProvider) (ACloudProvider, error) {
+	p.Connection.Browser = rod.New().MustConnect()
+	ACloudEnv, err := cli.LoadEnv()
+	cli.PrintIfErr(err)
+	p.ACloudEnv = ACloudEnv
+	Connection := core.Connect(p.Connection.Browser, p.ACloudEnv.Url)
+	cli.Success("Connection after: ", Connection)
+	p.Connection = Connection
+	return p, nil
+}

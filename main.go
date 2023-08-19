@@ -6,14 +6,15 @@ import (
 	"aws-multitool/core"
 	"bufio"
 	"fmt"
-	"github.com/go-rod/rod"
-	"github.com/manifoldco/promptui"
-	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-rod/rod"
+	"github.com/manifoldco/promptui"
+	"github.com/rs/zerolog"
 	// "runtime"
 	// "log"
 )
@@ -46,6 +47,14 @@ func ZeroLog() {
 	}
 	fmt.Println("global logger level : ")
 	fmt.Println(zerolog.GlobalLevel())
+}
+
+func NewBrowser(url string) (core.Connection, error) {
+	browser := rod.New().MustConnect()
+	Connection := core.Connect(browser, url)
+	cli.Success("Connection after: ", Connection)
+
+	return Connection, nil
 }
 
 func Profile() (m *AWSMaster) {
@@ -108,7 +117,7 @@ func Sandbox() (acloud.ACloudProvider, error) {
 		return p, err
 	}
 
-	p, err = ConnectBrowser(p)
+	p, err = acloud.ConnectBrowser(p)
 	cli.PrintIfErr(err)
 	cli.Success("environment : ", p.ACloudEnv)
 
@@ -135,17 +144,6 @@ func Sandbox() (acloud.ACloudProvider, error) {
 	//save provider
 	p.SandboxCredential = creds
 	return p, err
-}
-
-func ConnectBrowser(p acloud.ACloudProvider) (acloud.ACloudProvider, error) {
-	p.Connection.Browser = rod.New().MustConnect()
-	ACloudEnv, err := cli.LoadEnv()
-	cli.PrintIfErr(err)
-	p.ACloudEnv = ACloudEnv
-	Connection := core.Connect(p.Connection.Browser, p.ACloudEnv.Url)
-	cli.Success("Connection after: ", Connection)
-	p.Connection = Connection
-	return p, nil
 }
 
 func ReadAWSMasterFile() ([]AWSMaster, error) {
@@ -275,14 +273,14 @@ func UpdateAWSCredentials(profile, keyID, accessKey string) error {
 }
 
 func OpenAWSConsole(selectedProfile *AWSMaster) {
-	var openConsole string
-	fmt.Print("Do you want to open the AWS Management Console? (y/n): ")
-	fmt.Scan(&openConsole)
+	// var openConsole string
+	// fmt.Print("Do you want to open the AWS Management Console? (y/n): ")
+	// fmt.Scan(&openConsole)
 
-	if openConsole == "n" || openConsole == "no" || openConsole == "N" || openConsole == "No" || openConsole == "NO" {
-		fmt.Println("AWS Management Console will not be opened.")
-		return
-	}
+	// if openConsole == "n" || openConsole == "no" || openConsole == "N" || openConsole == "No" || openConsole == "NO" {
+	// 	fmt.Println("AWS Management Console will not be opened.")
+	// 	return
+	// }
 
 	if selectedProfile == nil || selectedProfile.Region == "" {
 		fmt.Println("Please select a valid AWS profile with a specified region.")
@@ -307,14 +305,19 @@ func OpenAWSConsole(selectedProfile *AWSMaster) {
 
 	consoleURL := fmt.Sprintf("https://%s.signin.aws.amazon.com/console", selectedProfile.AccountID)
 
-	cmd = exec.Command("open", consoleURL)
-	err = cmd.Run()
-	if err != nil {
-		fmt.Println("Error opening AWS Management Console:", err)
-		return
-	}
+	fmt.Println("Navigating to AWS Management Console page...")
 
-	fmt.Println("AWS Management Console opened in your default web browser.")
+	browser := rod.New().MustConnect()
+	defer browser.MustClose()
+
+	page := browser.MustPage(consoleURL)
+	defer page.MustClose()
+
+	// Optionally, you can take further actions using rod to interact with the page if needed.
+	// For example, you might want to log in with credentials or other interactions.
+	
+	fmt.Println("AWS Management Console page navigated to.")
+	select {} // This line will prevent the program from exiting and keep the browser open.
 }
 
 func AwsLogin(selectedProfile *AWSMaster) {
