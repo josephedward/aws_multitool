@@ -329,8 +329,6 @@ func AwsLogin(selectedProfile *AWSMaster) {
 	// Open AWS Management Console with the selected profile
 	OpenAWSConsole(selectedProfile)
 
-	// use core.SimpleLogin to login to AWS
-	core.SimpleLogin()
 }
 
 func OpenDefaultBrowserAndNavigate(pageURL string) (*rod.Page, error) {
