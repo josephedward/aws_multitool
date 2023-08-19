@@ -330,19 +330,3 @@ func AwsLogin(selectedProfile *AWSMaster) {
 	OpenAWSConsole(selectedProfile)
 
 }
-
-func OpenDefaultBrowserAndNavigate(pageURL string) (*rod.Page, error) {
-	browserInstance := rod.New().MustConnect()
-	// Create a new Rod page
-	page := browserInstance.MustPage(pageURL)
-
-	// Navigate the page to the specified URL
-	err := page.Navigate(pageURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to navigate to the page: %w", err)
-	}
-
-	page.WaitLoad()
-
-	return page, nil
-}
