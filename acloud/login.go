@@ -9,13 +9,16 @@ import (
 )
 
 func ACloudLogin(p ACloudProvider) (core.WebsiteLogin, error) {
-	login := ReadWebsiteLoginFromEnv()
+	login := ReadWebsiteLoginFromEnv(p)
 	fmt.Println("login : ", login)
 
 	return login, nil
 }
 
-func ReadWebsiteLoginFromEnv() core.WebsiteLogin {
+func ReadWebsiteLoginFromEnv(p ACloudProvider) core.WebsiteLogin {
+	ACloudEnv, err := cli.LoadEnvPath("./.env.acloud")
+	cli.PrintIfErr(err)
+	p.ACloudEnv = ACloudEnv
 	return core.WebsiteLogin{
 		Url:      getEnv("URL", "https://learn.acloud.guru/cloud-playground/cloud-sandboxes"),
 		Username: getEnv("USERNAME", ""),
@@ -33,7 +36,7 @@ func getEnv(key, defaultValue string) string {
 
 func ConnectBrowser(p ACloudProvider) (ACloudProvider, error) {
 	p.Connection.Browser = rod.New().MustConnect()
-	ACloudEnv, err := cli.LoadEnv()
+	ACloudEnv, err := cli.LoadEnvPath("./.env.acloud")
 	cli.PrintIfErr(err)
 	p.ACloudEnv = ACloudEnv
 	Connection := core.Connect(p.Connection.Browser, p.ACloudEnv.Url)

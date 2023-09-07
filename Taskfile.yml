@@ -5,6 +5,10 @@ tasks:
     cmds:
       - task: main
   main:
+      cmds:
+        - echo "***Running CLI***"
+        - go run ./main.go  -v 
+  mainv:
     cmds:
       - echo "***Running CLI***"
       - go run ./main.go  -v -rod="show,trace"

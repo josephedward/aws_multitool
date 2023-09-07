@@ -41,7 +41,6 @@ func LoadEnv() (login ACloudEnv, err error) {
 	//load env variables
 	err = godotenv.Load("./.env")
 	env := Env()
-	// fmt.Print("env: ", env)
 	return env, err
 }
 
