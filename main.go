@@ -6,13 +6,18 @@ import (
 	"aws-multitool/core"
 	"bufio"
 	"fmt"
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/manifoldco/promptui"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+	// "database/sql"
+	// "log"
 )
 
 type AWSMaster struct {
@@ -28,15 +33,23 @@ func main() {
 	cli.Welcome()
 	ZeroLog()
 
-	// Ask the user if they want to switch AWS profile or open the console
-	switchOrConsole := promptForSwitchOrConsole()
+	for {
 
-	if switchOrConsole == "Switch Profile" {
-		// If the user chooses to switch profile, call the Profile function
-		profile()
-	} else if switchOrConsole == "Open AWS Console" {
-		// If the user chooses to open the AWS console, call the awsConsole function
-		awsConsole()
+		// Ask the user if they want to switch AWS profile or open the console
+		pSwitch := promptSwitch()
+
+		if pSwitch == "Switch Profile" {
+			// If the user chooses to switch profile, call the Profile function
+			profile()
+		} else if pSwitch == "Open AWS Console" {
+			// If the user chooses to open the AWS console, call the awsConsole function
+			awsConsole()
+		} else if pSwitch == "Set Credentials" {
+			// If the user chooses to set credentials, call the retrieveCredentials function
+			setCreds("", "", "", "")
+		} else if pSwitch == "Exit" {
+			break
+		}
 	}
 
 }
@@ -55,10 +68,10 @@ func ZeroLog() {
 	fmt.Println(zerolog.GlobalLevel())
 }
 
-func promptForSwitchOrConsole() string {
+func promptSwitch() string {
 	prompt := promptui.Select{
 		Label: "Choose an option",
-		Items: []string{"Switch Profile", "Open AWS Console"},
+		Items: []string{"Switch Profile", "Open AWS Console", "Set Credentials", "Exit"},
 	}
 
 	_, result, err := prompt.Run()
@@ -102,7 +115,7 @@ func profile() (m *AWSMaster) {
 			return
 		}
 
-		err = replaceSandboxCredentials(newCreds.SandboxCredential.KeyID, newCreds.SandboxCredential.AccessKey)
+		err = replaceProfileCredentials("sandbox", newCreds.SandboxCredential.KeyID, newCreds.SandboxCredential.AccessKey)
 
 		if err != nil {
 			fmt.Println("Error updating AWS credentials:", err)
@@ -110,6 +123,9 @@ func profile() (m *AWSMaster) {
 		}
 		fmt.Println("Sandbox credentials updated successfully!")
 	}
+
+	//set environment for $AWS_PROFILE
+	os.Setenv("AWS_PROFILE", selected)
 
 	return &AWSMaster{
 		Profile:   selected,
@@ -219,7 +235,7 @@ func readAWSMasterFile() ([]AWSMaster, error) {
 	return credentials, scanner.Err()
 }
 
-func replaceSandboxCredentials(awsAccessKeyID, awsSecretAccessKey string) error {
+func replaceProfileCredentials(profileName, awsAccessKeyID, awsSecretAccessKey string) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -242,18 +258,18 @@ func replaceSandboxCredentials(awsAccessKeyID, awsSecretAccessKey string) error 
 	defer tmpFile.Close()
 
 	scanner := bufio.NewScanner(file)
-	inSandboxProfile := false
+	inProfile := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if strings.HasPrefix(line, "[sandbox]") {
-			inSandboxProfile = true
-		} else if inSandboxProfile && strings.HasPrefix(line, "[") {
-			inSandboxProfile = false
+		if strings.HasPrefix(line, "["+profileName+"]") {
+			inProfile = true
+		} else if inProfile && strings.HasPrefix(line, "[") {
+			inProfile = false
 		}
 
-		if inSandboxProfile {
+		if inProfile {
 			if strings.HasPrefix(line, "aws_access_key_id") {
 				line = fmt.Sprintf("aws_access_key_id = %s", awsAccessKeyID)
 			} else if strings.HasPrefix(line, "aws_secret_access_key") {
@@ -280,8 +296,7 @@ func replaceSandboxCredentials(awsAccessKeyID, awsSecretAccessKey string) error 
 	return nil
 }
 
-func awsConsole() {
-
+func getAwsConsoleUrl() (consoleURL string) {
 	cmd := exec.Command("aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text")
 
 	output, err := cmd.Output()
@@ -290,29 +305,123 @@ func awsConsole() {
 		return
 	}
 
-	accountID := strings.TrimSpace(string(output))
-	if accountID == "" {
+	accountIdSlice := strings.TrimSpace(string(output))
+	if accountIdSlice == "" {
 		fmt.Println("Failed to get the AWS account ID.")
 		return
 	}
 	// print account id
-	fmt.Println("Retrieved Account ID : ", accountID)
+	fmt.Println("Retrieved Account ID : ", accountIdSlice)
 
-	consoleURL := fmt.Sprintf("https://%s.signin.aws.amazon.com/console", accountID)
-
-	fmt.Println("Navigating to AWS Management Console page...")
-
-	cmd = exec.Command("open", consoleURL)
-	err = cmd.Run()
-	if err != nil {
-		fmt.Println("Error opening AWS Management Console:", err)
-		return
-	}
-
-	// Optionally, you can take further actions using rod to interact with the page if needed.
-	// For example, you might want to log in with credentials or other interactions.
-	fmt.Println("AWS Management Console page navigated to.")
-
-	select {} // This line will prevent the program from exiting and keep the browser open.
-	// return browser
+	accountID := string(accountIdSlice)
+	consoleURL = fmt.Sprintf("https://%s.signin.aws.amazon.com/console", accountID)
+	return consoleURL
 }
+
+func awsConsole() {
+
+	// print the current env var for AWS_PROFILE
+	fmt.Println("AWS_PROFILE : ", os.Getenv("AWS_PROFILE"))
+
+	consoleURL := getAwsConsoleUrl()
+
+	fmt.Println("Navigating to AWS Management Console page..." + consoleURL)
+
+	//set credentials
+	// setCreds(os.Getenv("AWS_PROFILE"), consoleURL, "", "")
+
+	u := launcher.New().Bin("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").Headless(false).MustLaunch()
+	browser := rod.New().ControlURL(u).MustConnect()
+
+	// //login to acloud
+	connection, err := core.Login(core.WebsiteLogin{consoleURL, "", ""}, browser)
+	cli.PrintIfErr(err)
+	cli.Success("connection : ", connection)
+
+}
+
+// const dbName = "credentials.db"
+
+// func setCreds(profileName, url, username, password string) {
+
+// 	db, err := sql.Open("sqlite3", dbName)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer db.Close()
+
+// 	createTableSQL := `
+// 		CREATE TABLE IF NOT EXISTS credentials (
+// 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+// 			profileName TEXT,
+// 			url TEXT,
+// 			username TEXT,
+// 			password TEXT
+// 		);
+// 		`
+// 	_, err = db.Exec(createTableSQL)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	fmt.Println("Please enter your credentials:")
+
+// 	if profileName == "" {
+// 		fmt.Print("Profile Name: ")
+// 		fmt.Scanln(&profileName)
+// 	}
+
+// 	if url == "" {
+// 		fmt.Print("URL: ")
+// 		fmt.Scanln(&url)
+// 	}
+
+// 	if username == "" {
+// 		fmt.Print("Username: ")
+// 		fmt.Scanln(&username)
+// 	}
+
+// 	if password == "" {
+// 		fmt.Print("Password: ")
+// 		fmt.Scanln(&password)
+// 	}
+
+// 	// Cleanse input to prevent SQL injection
+// 	profileName = strings.TrimSpace(profileName)
+// 	url = strings.TrimSpace(url)
+// 	username = strings.TrimSpace(username)
+// 	password = strings.TrimSpace(password)
+
+// 	// Insert the credentials into the database
+// 	insertSQL := "INSERT INTO credentials (profileName, url, username, password) VALUES (?, ?, ?, ?);"
+// 	_, err = db.Exec(insertSQL, profileName, url, username, password)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	fmt.Println("Credentials saved successfully!")
+
+// }
+
+// func retrieveCredentials(dbName, profileName string) (url, username, password string) {
+
+// 	db, err := sql.Open("sqlite3", dbName)
+
+// 	fmt.Printf("\nRetrieving stored credentials for profile '%s':\n", profileName)
+// 	rows, err := db.Query("SELECT url, username, password FROM credentials WHERE profileName = ?;", profileName)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer rows.Close()
+
+// 	for rows.Next() {
+// 		var url, username, password string
+// 		if err := rows.Scan(&url, &username, &password); err != nil {
+// 			log.Fatal(err)
+// 		}
+// 		fmt.Printf("URL: %s\nUsername: %s\nPassword: %s\n\n", url, username, password)
+// 	}
+
+// 	return url, username, password
+// }
+

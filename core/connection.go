@@ -46,7 +46,7 @@ func Login(login WebsiteLogin, browser *rod.Browser) (Connection, error) {
 	// browser := rod.New().MustConnect()
 
 	// Create a new page
-	page := browser.MustPage(login.Url)
+	page := browser.MustPage(login.Url).MustWindowFullscreen()
 
 	//if browser is nil, page is nil
 	if browser == nil || page == nil {
