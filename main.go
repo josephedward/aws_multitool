@@ -9,15 +9,12 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/manifoldco/promptui"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-	// "database/sql"
-	// "log"
 )
 
 type AWSMaster struct {
@@ -44,9 +41,6 @@ func main() {
 		} else if pSwitch == "Open AWS Console" {
 			// If the user chooses to open the AWS console, call the awsConsole function
 			awsConsole()
-		} else if pSwitch == "Set Credentials" {
-			// If the user chooses to set credentials, call the retrieveCredentials function
-			setCreds("", "", "", "")
 		} else if pSwitch == "Exit" {
 			break
 		}
