@@ -65,7 +65,7 @@ func ZeroLog() {
 func promptSwitch() string {
 	prompt := promptui.Select{
 		Label: "Choose an option",
-		Items: []string{"Switch Profile", "Open AWS Console", "Set Credentials", "Exit"},
+		Items: []string{"Switch Profile", "Open AWS Console", "Exit"},
 	}
 
 	_, result, err := prompt.Run()
