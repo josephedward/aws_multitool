@@ -121,6 +121,10 @@ func profile() (m *AWSMaster) {
 	//set environment for $AWS_PROFILE
 	os.Setenv("AWS_PROFILE", selected)
 
+	//set credentials
+	// setCreds(os.Getenv("AWS_PROFILE"), consoleURL, "", "")
+
+
 	return &AWSMaster{
 		Profile:   selected,
 		AccessKey: credentials[0].AccessKey,
@@ -320,9 +324,6 @@ func awsConsole() {
 	consoleURL := getAwsConsoleUrl()
 
 	fmt.Println("Navigating to AWS Management Console page..." + consoleURL)
-
-	//set credentials
-	// setCreds(os.Getenv("AWS_PROFILE"), consoleURL, "", "")
 
 	u := launcher.New().Bin("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").Headless(false).MustLaunch()
 	browser := rod.New().ControlURL(u).MustConnect()
