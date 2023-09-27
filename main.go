@@ -124,7 +124,6 @@ func profile() (m *AWSMaster) {
 	//set credentials
 	// setCreds(os.Getenv("AWS_PROFILE"), consoleURL, "", "")
 
-
 	return &AWSMaster{
 		Profile:   selected,
 		AccessKey: credentials[0].AccessKey,
@@ -316,7 +315,7 @@ func getAwsConsoleUrl() (consoleURL string) {
 	return consoleURL
 }
 
-func awsConsole() {
+func awsConsole() (connection *core.Connection) {
 
 	// print the current env var for AWS_PROFILE
 	fmt.Println("AWS_PROFILE : ", os.Getenv("AWS_PROFILE"))
@@ -332,5 +331,5 @@ func awsConsole() {
 	connection, err := core.Login(core.WebsiteLogin{consoleURL, "", ""}, browser)
 	cli.PrintIfErr(err)
 	cli.Success("connection : ", connection)
-
+	return connection
 }
