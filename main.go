@@ -16,8 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	// "database/sql"
-	// "log"
+	"database/sql"
+	"log"
 )
 
 type AWSMaster struct {
@@ -46,7 +46,10 @@ func main() {
 			awsConsole()
 		} else if pSwitch == "Set Credentials" {
 			// If the user chooses to set credentials, call the retrieveCredentials function
-			setCreds("", "", "", "")
+			setCredentials("", "", "", "")
+		}else if pSwitch == "Retrieve Credentials" {
+			// If the user chooses to set credentials, call the retrieveCredentials function
+			retrieveCredentials("", "")
 		} else if pSwitch == "Exit" {
 			break
 		}
@@ -340,88 +343,106 @@ func awsConsole() {
 
 }
 
-// const dbName = "credentials.db"
+const dbName = "credentials.db"
 
-// func setCreds(profileName, url, username, password string) {
+func setCredentials(profileName, url, username, password, dbName string) {
 
-// 	db, err := sql.Open("sqlite3", dbName)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer db.Close()
 
-// 	createTableSQL := `
-// 		CREATE TABLE IF NOT EXISTS credentials (
-// 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-// 			profileName TEXT,
-// 			url TEXT,
-// 			username TEXT,
-// 			password TEXT
-// 		);
-// 		`
-// 	_, err = db.Exec(createTableSQL)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if dbName == "" {
+		fmt.Print("Database Name: ")
+		fmt.Scanln(&dbName)
+	}
 
-// 	fmt.Println("Please enter your credentials:")
 
-// 	if profileName == "" {
-// 		fmt.Print("Profile Name: ")
-// 		fmt.Scanln(&profileName)
-// 	}
+	db, err := sql.Open("sqlite3", dbName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-// 	if url == "" {
-// 		fmt.Print("URL: ")
-// 		fmt.Scanln(&url)
-// 	}
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS credentials (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			profileName TEXT,
+			url TEXT,
+			username TEXT,
+			password TEXT
+		);
+		`
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	if username == "" {
-// 		fmt.Print("Username: ")
-// 		fmt.Scanln(&username)
-// 	}
+	fmt.Println("Please enter your credentials:")
 
-// 	if password == "" {
-// 		fmt.Print("Password: ")
-// 		fmt.Scanln(&password)
-// 	}
+	if profileName == "" {
+		fmt.Print("Profile Name: ")
+		fmt.Scanln(&profileName)
+	}
 
-// 	// Cleanse input to prevent SQL injection
-// 	profileName = strings.TrimSpace(profileName)
-// 	url = strings.TrimSpace(url)
-// 	username = strings.TrimSpace(username)
-// 	password = strings.TrimSpace(password)
+	if url == "" {
+		fmt.Print("URL: ")
+		fmt.Scanln(&url)
+	}
 
-// 	// Insert the credentials into the database
-// 	insertSQL := "INSERT INTO credentials (profileName, url, username, password) VALUES (?, ?, ?, ?);"
-// 	_, err = db.Exec(insertSQL, profileName, url, username, password)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if username == "" {
+		fmt.Print("Username: ")
+		fmt.Scanln(&username)
+	}
 
-// 	fmt.Println("Credentials saved successfully!")
+	if password == "" {
+		fmt.Print("Password: ")
+		fmt.Scanln(&password)
+	}
 
-// }
+	// Cleanse input to prevent SQL injection
+	profileName = strings.TrimSpace(profileName)
+	url = strings.TrimSpace(url)
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
 
-// func retrieveCredentials(dbName, profileName string) (url, username, password string) {
+	// Insert the credentials into the database
+	insertSQL := "INSERT INTO credentials (profileName, url, username, password) VALUES (?, ?, ?, ?);"
+	_, err = db.Exec(insertSQL, profileName, url, username, password)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	db, err := sql.Open("sqlite3", dbName)
+	fmt.Println("Credentials saved successfully!")
 
-// 	fmt.Printf("\nRetrieving stored credentials for profile '%s':\n", profileName)
-// 	rows, err := db.Query("SELECT url, username, password FROM credentials WHERE profileName = ?;", profileName)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer rows.Close()
+}
 
-// 	for rows.Next() {
-// 		var url, username, password string
-// 		if err := rows.Scan(&url, &username, &password); err != nil {
-// 			log.Fatal(err)
-// 		}
-// 		fmt.Printf("URL: %s\nUsername: %s\nPassword: %s\n\n", url, username, password)
-// 	}
+func retrieveCredentials(dbName, profileName string) (url, username, password string) {
+	if profileName == "" {
+		fmt.Print("Profile Name: ")
+		fmt.Scanln(&profileName)
+	}
 
-// 	return url, username, password
-// }
+	
+	db, err := sql.Open("sqlite3", dbName)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
 
+    fmt.Printf("\nRetrieving stored credentials for profile '%s':\n", profileName)
+    rows, err := db.Query("SELECT url, username, password FROM credentials WHERE profileName = ?;", profileName)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer rows.Close()
+
+    // Initialize variables to store retrieved values
+    var retrievedURL, retrievedUsername, retrievedPassword string
+
+    for rows.Next() {
+        if err := rows.Scan(&retrievedURL, &retrievedUsername, &retrievedPassword); err != nil {
+            log.Fatal(err)
+        }
+        fmt.Printf("URL: %s\nUsername: %s\nPassword: %s\n\n", retrievedURL, retrievedUsername, retrievedPassword)
+    }
+
+    // Return the values retrieved from the database
+    return retrievedURL, retrievedUsername, retrievedPassword
+}
