@@ -323,7 +323,7 @@ func getAwsConsoleUrl() (consoleURL string) {
 	return consoleURL
 }
 
-func awsConsole() (connection *core.Connection) {
+func awsConsole() (connection core.Connection) {
 
 	// print the current env var for AWS_PROFILE
 	fmt.Println("AWS_PROFILE : ", os.Getenv("AWS_PROFILE"))

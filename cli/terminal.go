@@ -53,10 +53,10 @@ func Error(message ...interface{}) {
 }
 
 func Welcome() {
-	fmt.Println(Green + "---------------------------------------------------------------------------------------------------------------" + Reset)
-	fmt.Println(Cyan +  "AWSIO" + Reset)
-	fmt.Println(Green + "---------------------------------------------------------------------------------------------------------------" + Reset)
+	fmt.Println(Green + "--------------------" + Reset)
+	fmt.Println(Cyan +  "      AWSIO" + Reset)
+	fmt.Println(Green + "--------------------" + Reset)
 	fmt.Println(Yellow + "AWS Multi-Use Tool" + Reset)
-	fmt.Println(Green + "---------------------------------------------------------------------------------------------------------------" + Reset)
+	fmt.Println(Green + "--------------------" + Reset)
 
 }
